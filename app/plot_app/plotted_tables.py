@@ -81,290 +81,97 @@ def get_heading_html(ulog, px4_ulog, db_data, link_to_3d_page,
         title_html += "<h5>"+db_data.description+"</h5>"
     return title_html
 
+from html import escape
+
 def get_info_table_html(ulog, px4_ulog, db_data, vehicle_data, vtol_states):
-    """
-    Get the html (as string) for a table with additional text info,
-    such as logging duration, max speed etc.
-    """
+    
+    def format_duration(seconds, verbose=False):
+        m, s = divmod(int(seconds), 60)
+        h, m = divmod(m, 60)
+        if not verbose:
+            return f"{h:d}:{m:02d}:{s:02d}"
+        
+        days, h = divmod(h, 24)
+        parts = []
+        if days > 0: parts.append(f'{days} days')
+        if h > 0: parts.append(f'{h} hours')
+        if m > 0: parts.append(f'{m} minutes')
+        parts.append(f'{s} seconds')
+        return ' '.join(parts)
 
-    ### Setup the text for the left table with various information ###
-    table_text_left = []
+    msg_info = ulog.msg_info_dict
+    table_data = []
 
-    # airframe
-    airframe_name_tuple = get_airframe_name(ulog, True)
-    if airframe_name_tuple is not None:
-        airframe_name, airframe_id = airframe_name_tuple
-        if len(airframe_name) == 0:
-            table_text_left.append(('Airframe', airframe_id))
-        else:
-            table_text_left.append(('Airframe', airframe_name+' <small>('+airframe_id+')</small>'))
+    airframe_tuple = get_airframe_name(ulog, True)
+    if airframe_tuple:
+        name, aid = airframe_tuple
+        val = aid if not name else f"{name} <small>({aid})</small>"
+        table_data.append(('Airframe', val))
 
+    sys_hw = escape(msg_info.get('ver_hw', ''))
+    if sys_hw:
+        sub_type = msg_info.get('ver_hw_subtype')
+        if sub_type:
+            sys_hw += f" ({escape(sub_type)})"
+        table_data.append(('Hardware', sys_hw))
 
-    # HW & SW
-    sys_hardware = ''
-    if 'ver_hw' in ulog.msg_info_dict:
-        sys_hardware = escape(ulog.msg_info_dict['ver_hw'])
-        if 'ver_hw_subtype' in ulog.msg_info_dict:
-            sys_hardware += ' (' + escape(ulog.msg_info_dict['ver_hw_subtype']) + ')'
-        table_text_left.append(('Hardware', sys_hardware))
+    sw_ver_git = msg_info.get('ver_sw', '')
+    if sw_ver_git:
+        release_str = ulog.get_version_info_str() or ''
+        branch = msg_info.get('ver_sw_branch', '')
+        branch_info = f"<br> branch: {branch}" if branch else ""
+        ver_link = f"https://github.com/PX4/Firmware/commit/{sw_ver_git}"
+        sw_val = f"{release_str} <small>(<a href='{ver_link}' target='_blank'>{sw_ver_git[:8]}</a>)</small>{branch_info}"
+        table_data.append(('Software Version', sw_val))
 
-    release_str = ulog.get_version_info_str()
-    if release_str is None:
-        release_str = ''
-        release_str_suffix = ''
-    else:
-        release_str += ' <small>('
-        release_str_suffix = ')</small>'
-    branch_info = ''
-    if 'ver_sw_branch' in ulog.msg_info_dict:
-        branch_info = '<br> branch: '+ulog.msg_info_dict['ver_sw_branch']
-    if 'ver_sw' in ulog.msg_info_dict:
-        ver_sw = escape(ulog.msg_info_dict['ver_sw'])
-        ver_sw_link = 'https://github.com/PX4/Firmware/commit/'+ver_sw
-        table_text_left.append(('Software Version', release_str +
-                                '<a href="'+ver_sw_link+'" target="_blank">'+ver_sw[:8]+'</a>'+
-                                release_str_suffix+branch_info))
-
-    if 'sys_os_name' in ulog.msg_info_dict and 'sys_os_ver_release' in ulog.msg_info_dict:
-        os_name = escape(ulog.msg_info_dict['sys_os_name'])
+    os_name = msg_info.get('sys_os_name')
+    if os_name:
         os_ver = ulog.get_version_info_str('sys_os_ver_release')
-        if os_ver is not None:
-            table_text_left.append(('OS Version', os_name + ', ' + os_ver))
+        table_data.append(('OS Version', f"{escape(os_name)}{', ' + os_ver if os_ver else ''}"))
 
-    table_text_left.append(('Estimator', px4_ulog.get_estimator()))
+    table_data.append(('Estimator', px4_ulog.get_estimator()))
+    table_data.append(('SEP', '---')) 
 
-    table_text_left.append(('', '')) # spacing
+    duration_s = (ulog.last_timestamp - ulog.start_timestamp) / 1e6
+    table_data.append(('Logging Duration', format_duration(duration_s)))
 
-    # logging start time & date
-    try:
-        # get the first non-zero timestamp
-        gps_data = ulog.get_dataset('vehicle_gps_position')
-        indices = np.nonzero(gps_data.data['time_utc_usec'])
-        if len(indices[0]) > 0:
-            # we use the timestamp from the log and then convert it with JS to
-            # display with local timezone.
-            # In addition we add a tooltip to show the timezone from the log
-            logging_start_time = int(gps_data.data['time_utc_usec'][indices[0][0]] / 1000000)
+    if ulog.dropouts:
+        total_drop_ms = sum(d.duration for d in ulog.dropouts) / 1000
+        drop_fmt = f"{total_drop_ms:.0f}" if total_drop_ms > 5 else f"{total_drop_ms:.2f}"
+        table_data.append(('Dropouts', f"{len(ulog.dropouts)} ({drop_fmt} s)"))
+    else:
+        table_data.append(('Dropouts', 'None'))
 
-            utc_offset_min = ulog.initial_parameters.get('SDLOG_UTC_OFFSET', 0)
-            utctimestamp = datetime.datetime.utcfromtimestamp(
-                logging_start_time+utc_offset_min*60).replace(tzinfo=datetime.timezone.utc)
-
-            tooltip = '''This is your local timezone.
-<br />
-Log timezone: {}
-<br />
-SDLOG_UTC_OFFSET: {}'''.format(utctimestamp.strftime('%d-%m-%Y %H:%M'), utc_offset_min)
-            tooltip = 'data-bs-toggle="tooltip" data-bs-delay=\'{"show":0, "hide":100}\' '+ \
-                'title="'+tooltip+'" '
-            table_text_left.append(
-                ('Logging Start '+
-                 '<i '+tooltip+' class="fa-solid fa-question" aria-hidden="true" '+
-                 'style="color:#666"></i>',
-                 '<span style="display:none" id="logging-start-element">'+
-                 str(logging_start_time)+'</span>'))
-    except:
-        # Ignore. Eg. if topic not found
-        pass
-
-
-    # logging duration
-    m, s = divmod(int((ulog.last_timestamp - ulog.start_timestamp)/1e6), 60)
-    h, m = divmod(m, 60)
-    table_text_left.append(('Logging Duration', '{:d}:{:02d}:{:02d}'.format(h, m, s)))
-
-    # dropouts
-    dropout_durations = [dropout.duration for dropout in ulog.dropouts]
-    if len(dropout_durations) > 0:
-        total_duration = sum(dropout_durations) / 1000
-        if total_duration > 5:
-            total_duration_str = '{:.0f}'.format(total_duration)
-        else:
-            total_duration_str = '{:.2f}'.format(total_duration)
-        table_text_left.append(('Dropouts', '{:} ({:} s)'.format(
-            len(dropout_durations), total_duration_str)))
-
-    # total vehicle flight time
     flight_time_s = get_total_flight_time(ulog)
     if flight_time_s is not None:
-        m, s = divmod(int(flight_time_s), 60)
-        h, m = divmod(m, 60)
-        days, h = divmod(h, 24)
-        flight_time_str = ''
-        if days > 0: flight_time_str += '{:d} days '.format(days)
-        if h > 0: flight_time_str += '{:d} hours '.format(h)
-        if m > 0: flight_time_str += '{:d} minutes '.format(m)
-        flight_time_str += '{:d} seconds '.format(s)
-        table_text_left.append(('Vehicle Life<br/>Flight Time', flight_time_str))
+        table_data.append(('Vehicle Life<br/>Flight Time', format_duration(flight_time_s, verbose=True)))
 
-    table_text_left.append(('', '')) # spacing
+    table_data.append(('SEP', '---'))
 
-    # vehicle UUID (and name if provided). SITL does not have a (valid) UUID
-    if 'sys_uuid' in ulog.msg_info_dict and sys_hardware != 'SITL' and \
-            sys_hardware != 'PX4_SITL':
-        sys_uuid = escape(ulog.msg_info_dict['sys_uuid'])
-        if vehicle_data is not None and vehicle_data.name != '':
-            sys_uuid = sys_uuid + ' (' + vehicle_data.name + ')'
-        if len(sys_uuid) > 0:
-            table_text_left.append(('Vehicle UUID', sys_uuid))
+    if 'sys_uuid' in msg_info and sys_hw not in ['SITL', 'PX4_SITL']:
+        uuid_val = escape(msg_info['sys_uuid'])
+        if vehicle_data and vehicle_data.name:
+            uuid_val += f" ({vehicle_data.name})"
+        table_data.append(('Vehicle UUID', uuid_val))
 
+    def render_table(data_list):
+        html_rows = []
+        is_padding_next = False
+        
+        for label, value in data_list:
+            if label == 'SEP':
+                is_padding_next = True
+                continue
+            
+            style = ' style="padding-top: 0.8em;"' if is_padding_next else ''
+            row = (f'<tr><td{style} class="left"><strong>{label}:</strong></td>'
+                   f'<td{style}>{value}</td></tr>')
+            html_rows.append(row)
+            is_padding_next = False
+            
+        return f'<table style="width:100%; border-collapse:collapse;">{"".join(html_rows)}</table>'
 
-    table_text_left.append(('', '')) # spacing
-
-    # Wind speed, rating, feedback
-    if db_data.wind_speed >= 0:
-        table_text_left.append(('Wind Speed', db_data.wind_speed_str()))
-    if len(db_data.rating) > 0:
-        table_text_left.append(('Flight Rating', db_data.rating_str()))
-    if len(db_data.feedback) > 0:
-        table_text_left.append(('Feedback', db_data.feedback.replace('\n', '<br/>')))
-    if len(db_data.video_url) > 0:
-        table_text_left.append(('Video', '<a href="'+db_data.video_url+
-                                '" target="_blank">'+db_data.video_url+'</a>'))
-
-
-    ### Setup the text for the right table: estimated numbers (e.g. max speed) ###
-    table_text_right = []
-    try:
-
-        local_pos = ulog.get_dataset('vehicle_local_position')
-        pos_x = local_pos.data['x']
-        pos_y = local_pos.data['y']
-        pos_z = local_pos.data['z']
-        pos_xyz_valid = np.multiply(local_pos.data['xy_valid'], local_pos.data['z_valid'])
-        local_vel_valid_indices = np.argwhere(np.multiply(local_pos.data['v_xy_valid'],
-                                                          local_pos.data['v_z_valid']) > 0)
-        vel_x = local_pos.data['vx'][local_vel_valid_indices]
-        vel_y = local_pos.data['vy'][local_vel_valid_indices]
-        vel_z = local_pos.data['vz'][local_vel_valid_indices]
-
-        # total distance (take only valid indexes)
-        total_dist_m = 0
-        last_index = -2
-        for valid_index in np.argwhere(pos_xyz_valid > 0):
-            index = valid_index[0]
-            if index == last_index + 1:
-                dx = pos_x[index] - pos_x[last_index]
-                dy = pos_y[index] - pos_y[last_index]
-                dz = pos_z[index] - pos_z[last_index]
-                total_dist_m += sqrt(dx*dx + dy*dy + dz*dz)
-            last_index = index
-        if total_dist_m < 1:
-            pass # ignore
-        elif total_dist_m > 1000:
-            table_text_right.append(('Distance', "{:.2f} km".format(total_dist_m/1000)))
-        else:
-            table_text_right.append(('Distance', "{:.1f} m".format(total_dist_m)))
-
-        if len(pos_z) > 0:
-            max_alt_diff = np.amax(pos_z) - np.amin(pos_z)
-            table_text_right.append(('Max Altitude Difference', "{:.0f} m".format(max_alt_diff)))
-
-        table_text_right.append(('', '')) # spacing
-
-        # Speed
-        if len(vel_x) > 0:
-            max_h_speed = np.amax(np.sqrt(np.square(vel_x) + np.square(vel_y)))
-            speed_vector = np.sqrt(np.square(vel_x) + np.square(vel_y) + np.square(vel_z))
-            max_speed = np.amax(speed_vector)
-            if vtol_states is None:
-                mean_speed = np.mean(speed_vector)
-                table_text_right.append(('Average Speed', "{:.1f} km/h".format(mean_speed*3.6)))
-            else:
-                local_pos_timestamp = local_pos.data['timestamp'][local_vel_valid_indices]
-                speed_vector = speed_vector.reshape((len(speed_vector),))
-                mean_speed_mc, mean_speed_fw = _get_vtol_means_per_mode(
-                    vtol_states, local_pos_timestamp, speed_vector)
-                if mean_speed_mc is not None:
-                    table_text_right.append(
-                        ('Average Speed MC', "{:.1f} km/h".format(mean_speed_mc*3.6)))
-                if mean_speed_fw is not None:
-                    table_text_right.append(
-                        ('Average Speed FW', "{:.1f} km/h".format(mean_speed_fw*3.6)))
-            table_text_right.append(('Max Speed', "{:.1f} km/h".format(max_speed*3.6)))
-            table_text_right.append(('Max Speed Horizontal', "{:.1f} km/h".format(max_h_speed*3.6)))
-            table_text_right.append(('Max Speed Up', "{:.1f} km/h".format(np.amax(-vel_z)*3.6)))
-            table_text_right.append(('Max Speed Down', "{:.1f} km/h".format(-np.amin(-vel_z)*3.6)))
-
-            table_text_right.append(('', '')) # spacing
-
-        vehicle_attitude = ulog.get_dataset('vehicle_attitude')
-        roll = vehicle_attitude.data['roll']
-        pitch = vehicle_attitude.data['pitch']
-        if len(roll) > 0:
-            # tilt = angle between [0,0,1] and [0,0,1] rotated by roll and pitch
-            tilt_angle = np.arccos(np.multiply(np.cos(pitch), np.cos(roll)))*180/np.pi
-            table_text_right.append(('Max Tilt Angle', "{:.1f} deg".format(np.amax(tilt_angle))))
-
-        rollspeed = vehicle_attitude.data['rollspeed']
-        pitchspeed = vehicle_attitude.data['pitchspeed']
-        yawspeed = vehicle_attitude.data['yawspeed']
-        if len(rollspeed) > 0:
-            max_rot_speed = np.amax(np.sqrt(np.square(rollspeed) +
-                                            np.square(pitchspeed) +
-                                            np.square(yawspeed)))
-            table_text_right.append(('Max Rotation Speed', "{:.1f} deg/s".format(
-                max_rot_speed*180/np.pi)))
-
-        table_text_right.append(('', '')) # spacing
-
-        battery_status = ulog.get_dataset('battery_status')
-        battery_current = battery_status.data['current_a']
-        if len(battery_current) > 0:
-            max_current = np.amax(battery_current)
-            if max_current > 0.1:
-                if vtol_states is None:
-                    mean_current = np.mean(battery_current)
-                    table_text_right.append(('Average Current', "{:.1f} A".format(mean_current)))
-                else:
-                    mean_current_mc, mean_current_fw = _get_vtol_means_per_mode(
-                        vtol_states, battery_status.data['timestamp'], battery_current)
-                    if mean_current_mc is not None:
-                        table_text_right.append(
-                            ('Average Current MC', "{:.1f} A".format(mean_current_mc)))
-                    if mean_current_fw is not None:
-                        table_text_right.append(
-                            ('Average Current FW', "{:.1f} A".format(mean_current_fw)))
-
-                table_text_right.append(('Max Current', "{:.1f} A".format(max_current)))
-    except:
-        pass # ignore (e.g. if topic not found)
-
-
-    # generate the tables
-    def generate_html_table(rows_list, tooltip=None, max_width=None):
-        """
-        return the html table (str) from a row list of tuples
-        """
-        if tooltip is None:
-            tooltip = ''
-        else:
-            tooltip = 'data-bs-toggle="tooltip" data-bs-placement="left" '+ \
-                'data-bs-delay=\'{"show": 1000, "hide": 100}\' title="'+tooltip+'" '
-        table = '<table '+tooltip
-        if max_width is not None:
-            table += ' style="max-width: '+max_width+';"'
-        table += '>'
-        padding_text = ''
-        for label, value in rows_list:
-            if label == '': # empty label means: add some row spacing
-                padding_text = ' style="padding-top: 0.5em;" '
-            else:
-                table += ('<tr><td '+padding_text+'class="left">'+label+
-                          ':</td><td'+padding_text+'>'+value+'</td></tr>')
-                padding_text = ''
-        return table + '</table>'
-
-    left_table = generate_html_table(table_text_left, max_width='65%')
-    right_table = generate_html_table(
-        table_text_right,
-        'Note: most of these values are based on estimations from the vehicle,'
-        ' and thus require an accurate estimator')
-    html_tables = ('<p><div style="display: flex; justify-content: space-between;">'+
-                   left_table+right_table+'</div></p>')
-
-    return html_tables
-
+    return f'<div class="info-table-wrapper">{render_table(table_data)}</div>'
 
 def get_error_labels_html():
     """
