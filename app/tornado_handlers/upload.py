@@ -126,8 +126,10 @@ class UploadHandler(TornadoRequestHandlerBase):
                      'allowForAnalysis', 'obfuscated', 'source', 'type',
                      'feedback', 'windSpeed', 'rating', 'videoUrl', 'public',
                      'vehicleName', 'redirect'])
-                description = escape(form_data['description'].decode("utf-8"))
-                email = form_data['email'].decode("utf-8")
+                # description = escape(form_data['description'].decode("utf-8"))
+                # email = form_data['email'].decode("utf-8")
+                description = ""
+                email = ""
                 upload_type = 'personal'
                 if 'type' in form_data:
                     upload_type = form_data['type'].decode("utf-8")
