@@ -1,112 +1,524 @@
-
 {% include 'header.html' %}
 
-<div class="row">
-	<div class="col-lg-6 mx-auto">
+<style>
+    :root {
+        --brand-color: #0d9488;
+        --brand-hover: #0f766e;
+        --brand-glow: rgba(13, 148, 136, 0.15);
+        --bg-body: #f8fafc;
+        --bg-surface: #ffffff;
+        --border-color: #e2e8f0;
+        --text-heading: #0f172a;
+        --text-body: #334155;
+        --text-muted: #64748b;
+    }
 
-		<h3>Upload a Log File</h3>
+    body {
+        background-color: var(--bg-body);
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        color: var(--text-body);
+    }
 
-		<p>
-		Select and upload a log file for plotting and analysis.
-		You can browse through public log files on <a href="/browse">this page</a>.
-		</p>
+    .navbar, header, nav, .navbar-default {
+        background: transparent !important; 
+        border: none !important;
+        box-shadow: none !important;
+        padding: 1.5rem 0 !important;
+        border-bottom: 1px solid rgba(226, 232, 240, 0.6) !important;
+        margin-bottom: 3rem !important;
+    }
 
+    .navbar-brand img, .navbar-logo, .navbar-toggle, .icon-bar, .navbar-form, .search-box {
+        display: none !important; 
+    }
+    
+    .navbar-brand {
+        padding: 0 !important;
+        display: flex !important;
+        align-items: center !important;
+    }
+    .navbar-brand::after {
+        content: 'Flight Review';
+        font-size: 1.35rem;
+        font-weight: 800;
+        letter-spacing: -0.05em;
+        color: var(--text-heading);
+    }
 
+    .navbar-collapse {
+        box-shadow: none !important;
+        border: none !important;
+    }
+    
+    .navbar-nav {
+        margin: 0 !important;
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+    }
 
-		<table class="spaced">
-			<form enctype="multipart/form-data" id="upload-form">
-				<tr>
-					<td width="30%" class="left">Description <small>(optional)</small>:</td>
-					<td width="70%">
-						<input class="form-control" placeholder="" name="description" type="text">
-					</td>
-				</tr>
-				<tr>
-					<td class="left">Additional Feedback <small>(optional)</small>:</td>
-					<td>
-						<textarea class="form-control" cols="20" rows="3" name="feedback"></textarea>
-					</td>
-				</tr>
-				<tr>
-					<td class="left">E-Mail:</td>
-					<td>
-						<input class="form-control" type="text" name="email" id="email"/>
-					</td>
-				</tr>
-				<tr>
-					<td colspan="2"><small>Will only be used to send you a link to
-							the uploaded file (including a link to delete) and is not stored on the server.</small></td>
-				</tr>
-				<tr>
-					<td class="left">Access to the log:</td>
-					<td>
-						<select class="form-select w-100" name="type" id="access" onChange="updateAccess()">
-							<option value="flightreport" selected="selected">Public</option>
-							<option value="personal">Share by Link</option>
-						</select>
-					</td>
-				</tr>
-				<tr id="flightreport" style="display: none;">
-					<td class="left"></td>
-					<td>
-						Make this log <a href="browse">publicly available</a> under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank">CC-BY PX4</a> license.
-						The PX4 community can use it to improve the flight stack.
-					</td>
-				</tr>
-				<tr id="personal" style="display: none;">
-					<td class="left"></td>
-					<td>
-						The log can only be accessed with the link you'll receive after uploading.
-						</br>
-						<b>Note</b>: The log may contain location data and if you
-						share the link, it will be accessible to others as well.
-					</td>
-				</tr>
-				<tr>
-					<td colspan="2">
-						<!-- automatically set depending on the "access" value -->
-						<input type="hidden" class="custom-control-input" name="public"
-								id="public" value="false">
-						<!-- instruct server not to redirect, but return the URL instead -->
-						<input type="hidden" class="custom-control-input" name="redirect"
-								id="redirect" value="false">
-					</td>
-				</tr>
-				<tr>
-					<td class="left">ULog File:</td>
-					<td>
-						<div class="input-group flex-row-reverse">
-							<input type="file" name="filearg" id="file" class="form-control">
-						</div>
-					</td>
-				</tr>
-				<tr>
-					<td id="feedback" colspan="2">
-					</td>
-				</tr>
-				<tr>
-					<td></td><td><br/><input class="btn btn-primary align-right"
-						id="upload-button" type="submit" value="Upload" onclick="return validateForm();" /></td>
-				</tr>
-				<tr>
-					<td colspan="2">
-						<div class="progress mt-3" style="height: 20px; display: none;">
-							<div class="progress-bar progress-bar-striped" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
-						</div>
-						<div id="upload-failure" class="align-right" style="display: none;">
-							<b>File upload failed.</b>
-						</div>
-					</td>
-				</tr>
-			</form>
-		</table>
+    .navbar-nav > li > a {
+        color: var(--text-muted) !important;
+        font-weight: 600 !important;
+        font-size: 0.95rem !important;
+        padding: 0.5rem 1rem !important;
+        margin-left: 0.5rem !important;
+        border-radius: 8px !important;
+        transition: all 0.2s ease !important;
+        text-shadow: none !important;
+    }
 
-	</div>
+    .navbar-nav > li > a:hover {
+        color: var(--text-heading) !important;
+        background-color: rgba(15, 23, 42, 0.04) !important;
+    }
+    
+    .navbar-nav > li.active > a {
+        color: var(--text-heading) !important;
+        background-color: transparent !important;
+    }
+       
+    .saas-panel {
+        background: var(--bg-surface);
+        border-radius: 20px;
+        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01);
+        border: 1px solid rgba(226, 232, 240, 0.6);
+        overflow: hidden;
+    }
+
+    .saas-panel-header {
+        height: 4px;
+        background: linear-gradient(90deg, #38bdf8, var(--brand-color));
+        width: 100%;
+    }
+
+    .section-title {
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: var(--text-heading);
+        display: flex;
+        align-items: center;
+        margin-bottom: 1.5rem;
+        padding-bottom: 0.75rem;
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .saas-label {
+        display: block;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--text-muted);
+        margin-bottom: 0.6rem;
+    }
+
+    .saas-input {
+        background-color: #fcfcfd;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        color: var(--text-heading);
+        font-size: 0.95rem;
+        padding: 0.75rem 1rem;
+        transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+    }
+    .saas-input:hover {
+        background-color: #ffffff;
+        border-color: #cbd5e1;
+    }
+    .saas-input:focus {
+        background-color: #ffffff;
+        border-color: var(--brand-color);
+        box-shadow: 0 0 0 4px var(--brand-glow), 0 1px 2px rgba(0,0,0,0.02);
+        outline: none;
+    }
+
+    .upload-dropzone {
+        border: 2px dashed #cbd5e1;
+        border-radius: 16px;
+        background: linear-gradient(180deg, #fafafa 0%, #f8fafc 100%);
+        padding: 3.5rem 2rem;
+        text-align: center;
+        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        position: relative;
+        cursor: pointer;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+    }
+    
+    .upload-dropzone::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: var(--brand-glow);
+        opacity: 0;
+        transition: opacity 0.3s ease;
+        z-index: 0;
+    }
+
+    .upload-dropzone:hover, .upload-dropzone.dragover {
+        border-color: var(--brand-color);
+        border-style: solid;
+        transform: translateY(-2px);
+        box-shadow: 0 10px 25px -5px rgba(13, 148, 136, 0.1);
+    }
+    .upload-dropzone:hover::before, .upload-dropzone.dragover::before {
+        opacity: 1;
+    }
+
+    .upload-dropzone > * {
+        position: relative;
+        z-index: 1;
+    }
+
+    .upload-dropzone input[type="file"] {
+        position: absolute;
+        inset: 0;
+        opacity: 0;
+        cursor: pointer;
+        z-index: 10;
+    }
+
+    .icon-container {
+        width: 64px;
+        height: 64px;
+        background: #ffffff;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+        margin-bottom: 1.25rem;
+        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    .upload-icon {
+        width: 32px;
+        height: 32px;
+        color: #94a3b8;
+        transition: color 0.4s ease;
+    }
+
+    .upload-dropzone:hover .icon-container, .upload-dropzone.dragover .icon-container {
+        background: var(--brand-color);
+        transform: scale(1.05);
+        box-shadow: 0 10px 15px -3px rgba(13, 148, 136, 0.2);
+    }
+    
+    .upload-dropzone:hover .upload-icon, .upload-dropzone.dragover .upload-icon {
+        color: #ffffff;
+    }
+
+    .file-selected-card {
+        background: #ffffff;
+        border: 1px solid #10b981;
+        border-radius: 12px;
+        padding: 1rem 1.25rem;
+        display: flex;
+        align-items: center;
+        box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.1);
+        width: 100%;
+        margin-top: 1.5rem;
+    }
+
+    .btn-action {
+        background: linear-gradient(135deg, var(--text-heading), #334155);
+        color: #ffffff;
+        font-weight: 600;
+        font-size: 1.05rem;
+        padding: 0.875rem 2.5rem;
+        border-radius: 12px;
+        border: none;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 6px -1px rgba(15, 23, 42, 0.2);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+    }
+    .btn-action:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 15px -3px rgba(15, 23, 42, 0.3);
+        background: linear-gradient(135deg, var(--brand-color), var(--brand-hover));
+    }
+    
+    .btn-action:disabled {
+        opacity: 0.7;
+        cursor: not-allowed;
+        transform: none;
+        box-shadow: none;
+    }
+</style>
+
+<div class="container"> 
+    <div class="row justify-content-center">
+        <div class="col-12 col-xl-11">
+            
+            <div class="text-center mb-5">
+                <h1 class="fw-bolder" style="color: var(--text-heading); font-size: 2.5rem; letter-spacing: -1px;">Upload Telemetry</h1>
+                <p class="text-muted fs-5 mt-2">
+                    Securely upload flight logs for analysis, or explore the <a href="/browse" class="text-decoration-none fw-semibold" style="color: var(--brand-color);">Public Archive</a>.
+                </p>
+            </div>
+
+            <div class="saas-panel mb-5">
+                <div class="saas-panel-header"></div>
+                
+                <form id="upload-form" class="p-4 p-md-5">
+                    
+                    <div class="row g-5">
+                        <div class="col-lg-6">
+                            <h2 class="section-title">
+                                <svg class="me-2" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path>
+                                    <polyline points="14 2 14 8 20 8"></polyline>
+                                    <line x1="16" y1="13" x2="8" y2="13"></line>
+                                    <line x1="16" y1="17" x2="8" y2="17"></line>
+                                    <line x1="10" y1="9" x2="8" y2="9"></line>
+                                </svg>
+                                File Selection
+                            </h2>
+                            
+                            <div class="mb-4">
+                                <label class="saas-label">Select ULog File <span class="text-danger">*</span></label>
+                                <div class="upload-dropzone" id="dropzone">
+                                    
+                                    <div class="icon-container" id="dropzone-icon">
+                                        <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                                            <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"></path>
+                                            <path d="M12 12v9"></path>
+                                            <path d="m16 16-4-4-4 4"></path>
+                                        </svg>
+                                    </div>
+                                    
+                                    <h5 class="fw-bold mb-0" style="color: var(--text-heading);" id="dropzone-text">Click or drag file here</h5>
+                                    
+                                    <input type="file" name="filearg" id="file" accept=".ulg" required>
+                                    
+                                    <div id="file-name-display" class="file-selected-card" style="display:none;">
+                                        <svg width="24" height="24" class="me-3 flex-shrink-0" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                                            <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                                        </svg>
+                                        <div class="text-start text-truncate">
+                                            <div class="fw-bold" style="color: #064e3b; font-size: 0.95rem;" id="file-name-text">filename.ulg</div>
+                                            <div style="color: #059669; font-size: 0.75rem;">Ready to upload</div>
+                                        </div>
+                                    </div>
+                                    
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-lg-6 border-start-lg border-light">
+                            <h2 class="section-title">
+                                <svg class="me-2" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
+                                    <path d="M3 5V19A9 3 0 0 0 21 19V5"></path>
+                                    <path d="M3 12A9 3 0 0 0 21 12"></path>
+                                </svg>
+                                Metadata <span class="text-muted fw-normal fs-6 ms-2 text-transform-none" style="text-transform: none; letter-spacing: normal;">(Optional)</span>
+                            </h2>
+
+                            <div class="mb-4">
+                                <label for="description" class="saas-label">Flight Context</label>
+                                <input class="form-control saas-input" id="description" name="description" type="text">
+                            </div>
+
+                            <div class="mb-4">
+                                <label for="feedback" class="saas-label">Diagnostic Notes</label>
+                                <textarea class="form-control saas-input" id="feedback" name="feedback" rows="5"></textarea>
+                            </div>
+                            
+                            <div style="display: none;" aria-hidden="true">
+                                <select name="type" id="access">
+                                    <option value="flightreport" selected="selected">Public</option>
+                                </select>
+                                <input type="email" name="email" id="email" value="anonymous@example.com">
+                            </div>
+                        </div>
+
+                    </div> <hr class="my-5" style="border-color: var(--border-color); opacity: 1;">
+
+                    <input type="hidden" name="public" id="public" value="false">
+                    <input type="hidden" name="redirect" id="redirect" value="false">
+                    
+                    <div id="feedback-message"></div>
+
+                    <div class="text-center">
+                        <button class="btn-action" id="upload-button" type="submit">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="17 8 12 3 7 8"></polyline>
+                                <line x1="12" y1="3" x2="12" y2="15"></line>
+                            </svg>
+                            Start Secure Upload
+                        </button>
+                    </div>
+
+                    <div class="mt-4 mx-auto" style="max-width: 500px;">
+                        <div class="progress rounded-pill bg-light" style="height: 8px; display: none;" id="upload-progress-container">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated" id="upload-progress-bar" role="progressbar" style="width: 0%; background-color: var(--brand-color);" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+                        </div>
+                        <div id="upload-failure" class="alert alert-danger mt-3 border-0 rounded-3 text-center" style="display: none; background: #fef2f2; color: #991b1b;">
+                            <strong>Upload Interrupted.</strong> <span id="error-text">Please check the file and try again.</span>
+                        </div>
+                    </div>
+
+                </form>
+            </div>
+
+        </div>
+    </div>
 </div>
 
-{% include 'footer.html' %}
+{{ plot_script }}
+
+<script src="https://ajax.aspnetcdn.com/ajax/jQuery/jquery-3.1.0.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chosen/1.8.3/chosen.jquery.min.js"></script>
+<script type="text/javascript" src="plot_app/static/js/pace.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
+<script type="text/javascript" src="plot_app/static/js/bootstrap-filestyle.min.js"></script>
+
+<script type="text/javascript">
+{% include 'main.js' %}
+</script>
 
 <script type="text/javascript" src="plot_app/static/js/upload.js"></script>
+
+<script>
+    const dropzone = document.getElementById('dropzone');
+    const fileInput = document.getElementById('file');
+    const fileNameDisplay = document.getElementById('file-name-display');
+    const fileNameText = document.getElementById('file-name-text');
+    const dropzoneIcon = document.getElementById('dropzone-icon');
+    const dropzoneText = document.getElementById('dropzone-text');
+
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        dropzone.addEventListener(eventName, preventDefaults, false);
+    });
+
+    function preventDefaults(e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+
+    ['dragenter', 'dragover'].forEach(eventName => {
+        dropzone.addEventListener(eventName, () => dropzone.classList.add('dragover'), false);
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+        dropzone.addEventListener(eventName, () => dropzone.classList.remove('dragover'), false);
+    });
+
+    dropzone.addEventListener('drop', (e) => {
+        let dt = e.dataTransfer;
+        let files = dt.files;
+        if (files && files.length > 0) {
+            fileInput.files = files;
+            updateFileName();
+        }
+    });
+
+    fileInput.addEventListener('change', updateFileName);
+
+    function updateFileName() {
+        if (fileInput.files && fileInput.files.length > 0) {
+            fileNameText.textContent = fileInput.files[0].name;
+            fileNameDisplay.style.display = 'flex';
+            dropzoneIcon.style.display = 'none';
+            dropzoneText.style.display = 'none';
+            document.getElementById('upload-failure').style.display = 'none'; 
+        } else {
+            fileNameDisplay.style.display = 'none';
+            dropzoneIcon.style.display = 'flex';
+            dropzoneText.style.display = 'block';
+        }
+    }
+
+    const uploadForm = document.getElementById('upload-form');
+    const uploadBtn = document.getElementById('upload-button');
+    const progressContainer = document.getElementById('upload-progress-container');
+    const progressBar = document.getElementById('upload-progress-bar');
+    const errorBox = document.getElementById('upload-failure');
+    const errorText = document.getElementById('error-text');
+
+    $(uploadForm).off('submit'); 
+
+    uploadForm.addEventListener('submit', function(e) {
+        e.preventDefault(); 
+
+        if (!fileInput.files || fileInput.files.length === 0) {
+            alert('Please select a ULog file to upload.');
+            return;
+        }
+
+        let formData = new FormData(uploadForm);
+
+        uploadBtn.setAttribute('disabled', 'true');
+        uploadBtn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="animation: spin 1.5s linear infinite;"><line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line><line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line></svg> Uploading...';
+        
+        progressContainer.style.display = 'flex';
+        errorBox.style.display = 'none';
+        progressBar.style.width = '0%';
+
+        let xhr = new XMLHttpRequest();
+        xhr.open('POST', '/upload', true); 
+
+        xhr.upload.onprogress = function(event) {
+            if (event.lengthComputable) {
+                let percentComplete = Math.round((event.loaded / event.total) * 100);
+                progressBar.style.width = percentComplete + '%';
+                progressBar.setAttribute('aria-valuenow', percentComplete);
+            }
+        };
+
+        xhr.onload = function() {
+            if (xhr.status === 200 || xhr.status === 302) {
+                try {
+                    let response = JSON.parse(xhr.responseText);
+                    if (response.url) {
+                        progressBar.classList.remove('progress-bar-animated');
+                        progressBar.style.backgroundColor = '#10b981'; 
+                        uploadBtn.innerHTML = 'Redirecting...';
+                        window.location.href = response.url;
+                    } else if (response.error) {
+                        showError(response.error);
+                    } else {
+                        showError("Invalid response format from server.");
+                    }
+                } catch (e) {
+                    console.error("JSON parsing error:", e, xhr.responseText);
+                    showError("Server returned an unexpected response.");
+                }
+            } else {
+                showError("Upload failed with status: " + xhr.status);
+            }
+        };
+
+        xhr.onerror = function() {
+            showError("Network error occurred during upload.");
+        };
+
+        function showError(msg) {
+            progressContainer.style.display = 'none';
+            errorBox.style.display = 'block';
+            errorText.textContent = msg;
+            uploadBtn.removeAttribute('disabled');
+            uploadBtn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg> Start Secure Upload';
+        }
+
+        xhr.send(formData);
+    });
+</script>
+
+<style>
+    @keyframes spin { 100% { transform: rotate(360deg); } }
+</style>
 
 </body>
 </html>
